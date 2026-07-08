@@ -6,12 +6,10 @@ const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 // dennis import
+const movieRoutes = require("./routes/movieRouter");
 
 // step import
 
-// Step kode
-
-// Dennis kode
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -34,6 +32,11 @@ app.get("/", (req, res) => {
     message: "Server is running",
   });
 });
+
+// Step kode
+
+// Dennis kode
+app.use("/api/movies", movieRoutes);
 
 // Pasang routes ke prefix /api/auth
 app.use('/api/auth', authRoutes);
