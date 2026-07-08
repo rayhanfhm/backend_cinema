@@ -6,7 +6,7 @@ const sendEmail = require("../utils/sendEmail");
 
 exports.register = async (req, res) => {
     try {
-        const { name, email, password, passwordConfirm } = req.body;
+        const { name, email, password, passwordConfirm,location } = req.body;
         // validasi password
         if (password !== passwordConfirm) {
       return res.status(400).json({ 
@@ -29,6 +29,7 @@ exports.register = async (req, res) => {
       name,
       email,
       password,
+      location,
       role: 'user' 
     });
     res.status(201).json({
@@ -38,6 +39,7 @@ exports.register = async (req, res) => {
         userId: user._id,
         name: user.name,
         email: user.email,
+        location: user.location,
         role: user.role
       }
     });
