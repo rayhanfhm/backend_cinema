@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const movieController = require("../controllers/movieController");
+const showtimeController = require("../controllers/showtimeController");
 const authMiddleware = require("../middleware/authMiddleware");
 
 // public routes
@@ -28,5 +29,7 @@ router.delete(
   authMiddleware.requireAdmin,
   movieController.deleteMovie,
 );
+
+router.get("/:movieId/showtimes", showtimeController.getShowtimesByMovie);
 
 module.exports = router;

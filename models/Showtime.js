@@ -11,13 +11,22 @@ const ShowtimeSchema = new mongoose.Schema({
     type: Date,
     required: [true, "Date is required"],
   },
-  time: {
+  time_start: {
     type: String,
-    required: [true, "Time is required"],
+    required: [true, "Start time is required"],
     trim: true,
     match: [
       /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-      "Time must be in HH:MM format",
+      "Time start must be in HH:MM format",
+    ],
+  },
+  time_end: {
+    type: String,
+    required: [true, "End time is required"],
+    trim: true,
+    match: [
+      /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+      "Time end must be in HH:MM format",
     ],
   },
   studio: {
@@ -41,6 +50,14 @@ const ShowtimeSchema = new mongoose.Schema({
       },
     ],
     default: [],
+  },
+  status: {
+    type: String,
+    enum: {
+      values: ["available", "full", "on boarding", "on play", "ended"],
+      message: "{VALUE} is not a valid status",
+    },
+    default: "available",
   },
 });
 

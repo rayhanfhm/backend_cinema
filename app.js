@@ -7,6 +7,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 // dennis import
 const movieRoutes = require("./routes/movieRouter");
+const showtimeRouter = require("./routes/showtimeRouter");
 
 // step import
 
@@ -37,6 +38,7 @@ app.get("/", (req, res) => {
 
 // Dennis kode
 app.use("/api/movies", movieRoutes);
+app.use("/api/showtimes", showtimeRouter);
 
 // Pasang routes ke prefix /api/auth
 app.use('/api/auth', authRoutes);

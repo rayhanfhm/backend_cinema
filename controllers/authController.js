@@ -24,6 +24,14 @@ exports.register = async (req, res) => {
       });
     }
 
+    // cek role, jika ada role selain 'user', tolak registrasi
+    if(req.body.role && req.body.role !== 'user') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'You are not allowed to register as admin'
+      });
+    }
+
     // buat user baru
     const user = await User.create({
       name,
