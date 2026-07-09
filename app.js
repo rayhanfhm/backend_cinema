@@ -4,25 +4,28 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
+
+// kode dennis
 const authRoutes = require("./routes/authRoutes");
-// dennis import
+
+// kode step
 const movieRoutes = require("./routes/movieRouter");
 const showtimeRouter = require("./routes/showtimeRouter");
-
-// step import
-
+const publicRoutes = require("./routes/publicRoutes");
+const userController = require("./controllers/userController");
+const { protect } = require("./middleware/authMiddleware");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// connect ke database
 connectDB();
 
-// middleware global
-app.use (cors({
-  origin: "http://localhost:3000",
-  credentials: true,
-}))
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 app.use(cookieParser());
@@ -34,15 +37,24 @@ app.get("/", (req, res) => {
   });
 });
 
-// Step kode
+// kode step
+app.get("/api/showtimes/:id/seats", userController.getShowtimeSeats);
+app.post("/api/bookings", protect, userController.createBooking);
+app.get("/api/bookings", protect, userController.getUserBookings);
+app.delete("/api/bookings/:bookingId", protect, userController.cancelBooking);
 
-// Dennis kode
+// kode step
+app.use("/api/public", publicRoutes);
 app.use("/api/movies", movieRoutes);
 app.use("/api/showtimes", showtimeRouter);
 
-// Pasang routes ke prefix /api/auth
-app.use('/api/auth', authRoutes);
+// kode dennis
+app.use("/api/auth", authRoutes);
 
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+  });
+}
+
+module.exports = app;
