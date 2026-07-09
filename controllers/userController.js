@@ -12,17 +12,24 @@ const getShowtimeSeats = async (req, res) => {
 
     const showtime = await Showtime.findById(id);
     if (!showtime) {
-      return res.status(404).json({ message: "Showtime not available" });
+      return res.status(404).json({ 
+        status: "error",
+        message: "Showtime not available" });
     }
 
     res.status(200).json({
+      status: "success",
+      message: "Showtime seats retrieved successfully",
+      movieId: showtime.movieId,
       showtimeId: showtime._id,
       studio: showtime.studio,
       price: showtime.price,
       bookedSeats: showtime.bookedSeats,
     });
   } catch (error) {
-    res.status(500).json({ message: "Error retrieving showtime seats", error: error.message });
+    res.status(500).json({ 
+      status: "error",
+      message: "Error retrieving showtime seats", error: error.message });
   }
 };
 
@@ -35,17 +42,22 @@ const createBooking = async (req, res) => {
     const userId = req.user._id;
 
     if (!showtimeId || !seats || !Array.isArray(seats) || seats.length === 0) {
-      return res.status(400).json({ message: "Invalid showtime or seats selection." });
+      return res.status(400).json({ 
+        status: "error",
+        message: "Invalid showtime or seats selection." });
     }
 
     const showtime = await Showtime.findById(showtimeId);
     if (!showtime) {
-      return res.status(404).json({ message: "Showtime not found." });
+      return res.status(404).json({ 
+        status: "error",
+        message: "Showtime not found." });
     }
 
     const conflictSeats = seats.filter((seat) => showtime.bookedSeats.includes(seat));
     if (conflictSeats.length > 0) {
       return res.status(409).json({
+        status: "error",
         message: "One or more selected seats are no longer available.",
         unavailableSeats: conflictSeats,
       });
@@ -68,13 +80,18 @@ const createBooking = async (req, res) => {
     await showtime.save();
 
     res.status(201).json({
+      status: "success",
       message: "Booking created successfully.",
       bookingId: newBooking._id,
       totalPrice,
       bookedSeats: seats,
     });
   } catch (error) {
-    res.status(500).json({ message: "Error creating booking", error: error.message });
+    res.status(500).json({ 
+      status: "error",
+      message: "Error creating booking",
+      error: error.message 
+    });
   }
 };
 
@@ -89,9 +106,16 @@ const getUserBookings = async (req, res) => {
       .populate("showtimeId", "studio date time_start time_end")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ bookings });
+    res.status(200).json({ 
+      status: "success",
+      bookings 
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error retrieving user bookings", error: error.message });
+    res.status(500).json({ 
+      status: "error",
+      message: "Error retrieving user bookings",
+      error: error.message 
+    });
   }
 };
 
@@ -105,20 +129,32 @@ const cancelBooking = async (req, res) => {
 
     const booking = await Booking.findById(bookingId).populate("showtimeId");
     if (!booking) {
-      return res.status(404).json({ message: "Booking not found." });
+      return res.status(404).json({ 
+        status: "error",
+        message: "Booking not found." 
+      });
     }
 
     if (booking.userId.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Unauthorized to cancel this booking." });
+      return res.status(403).json({ 
+        status: "error",
+        message: "Unauthorized to cancel this booking." 
+      });
     }
 
     if (booking.status === "cancelled") {
-      return res.status(400).json({ message: "Booking has already been cancelled." });
+      return res.status(400).json({ 
+        status: "error",
+        message: "Booking has already been cancelled." 
+      });
     }
 
     const showtime = booking.showtimeId;
     if (!showtime) {
-      return res.status(404).json({ message: "Showtime data for this booking is missing." });
+      return res.status(404).json({ 
+        status: "error",
+        message: "Showtime data for this booking is missing." 
+      });
     }
 
     const [hours, minutes] = showtime.time_start.split(":").map(Number);
@@ -129,6 +165,7 @@ const cancelBooking = async (req, res) => {
 
     if (currentTime > cancellationDeadline) {
       return res.status(400).json({
+        status: "error",
         message: "Cancellation period has passed. You can only cancel up to 30 minutes before the movie starts.",
       });
     }
@@ -140,12 +177,17 @@ const cancelBooking = async (req, res) => {
     await showtime.save();
 
     res.status(200).json({
+      status: "success",
       message: "Booking cancelled successfully.",
       bookingId: booking._id,
       cancelledSeats: booking.seats,
     });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ 
+      status: "error",
+      message: "Server error",
+      error: error.message 
+    });
   }
 };
 
