@@ -7,6 +7,7 @@ const connectDB = require("./config/db");
 
 // kode dennis
 const authRoutes = require("./routes/authRoutes");
+const profileRoutes = require("./routes/profileRoutes");
 
 // kode step
 const movieRoutes = require("./routes/movieRouter");
@@ -51,6 +52,7 @@ app.use("/api/showtimes", showtimeRouter);
 
 // kode dennis
 app.use("/api/auth", authRoutes);
+app.use("/api/profile", profileRoutes);
 
 if (require.main === module) {
   app.listen(port, () => {
