@@ -21,7 +21,10 @@ exports.protect = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // ANTI JWT INJECTION: Kunci algoritma hanya ke HS256
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
 
     // Cek langsung ke database menggunakan email dari payload JWT
     const currentUser = await User.findOne({ email: decoded.email });
@@ -30,6 +33,14 @@ exports.protect = async (req, res, next) => {
       return res.status(401).json({
         status: "error",
         message: "Pengguna dengan token ini sudah tidak ditemukan",
+      });
+    }
+
+    // Tolak akses jika penyerang mencoba memanipulasi role di JWT
+    if (decoded.role && decoded.role !== currentUser.role) {
+      return res.status(403).json({
+        status: "error",
+        message: "Integritas token gagal. Role tidak cocok dengan database!",
       });
     }
 
@@ -45,7 +56,6 @@ exports.protect = async (req, res, next) => {
 };
 
 exports.requireAdmin = (req, res, next) => {
-  // req.user di sini berisi data fresh dari database, bukan dari JWT payload
   if (req.user.role !== "admin") {
     return res.status(403).json({
       status: "error",

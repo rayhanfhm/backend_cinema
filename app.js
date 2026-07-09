@@ -42,7 +42,7 @@ app.get("/", (req, res) => {
 
 app.get("/api/showtimes/:id/seats", userController.getShowtimeSeats);
 app.post("/api/bookings", protect, userController.createBooking);
-app.put("/api/bookings/:bookingId/pay", protect, userController.payBooking);
+app.post("/api/bookings/midtrans-webhook", userController.midtransNotification);
 app.get("/api/bookings", protect, userController.getUserBookings);
 app.delete("/api/bookings/:bookingId", protect, userController.cancelBooking);
 

@@ -1,9 +1,16 @@
 const Booking = require("../models/Booking");
 const Showtime = require("../models/Showtime");
+const Payment = require("../models/Payment");
+const midtransClient = require("midtrans-client");
+const { getShowtimeWindowWIB } = require("../utils/dateUtils");
+
+const snap = new midtransClient.Snap({
+  isProduction: false,
+  serverKey: process.env.MIDTRANS_SERVER_KEY || "SB-Mid-server-XXXXX",
+});
 
 /**
  * HELPER FUNCTION: Generate Seat Layout
- * Menghasilkan array of objects untuk 40 kursi (A1-D10) beserta statusnya
  */
 const generateSeatLayout = (bookedSeats = []) => {
   const rows = ["A", "B", "C", "D"];
@@ -28,21 +35,17 @@ const generateSeatLayout = (bookedSeats = []) => {
 const getShowtimeSeats = async (req, res) => {
   try {
     const { id } = req.params;
-
     const showtime = await Showtime.findById(id);
     if (!showtime) {
-      return res.status(404).json({
-        status: "error",
-        message: "Showtime not found.",
-      });
+      return res
+        .status(404)
+        .json({ status: "error", message: "Showtime not found." });
     }
 
-    // Menggunakan helper function yang sudah dipisah
     const seatLayout = generateSeatLayout(showtime.bookedSeats);
 
     res.status(200).json({
       status: "success",
-      message: "Seat data retrieved successfully.",
       data: {
         movieId: showtime.movieId,
         showtimeId: showtime._id,
@@ -58,18 +61,17 @@ const getShowtimeSeats = async (req, res) => {
 };
 
 /**
- * 2. CREATE BOOKING (USER)
+ * 2. CREATE BOOKING & MIDTRANS TOKEN (USER)
  */
 const createBooking = async (req, res) => {
   try {
     const { showtimeId, seats } = req.body;
-    const userId = req.user._id;
+    const user = req.user;
 
     if (!showtimeId || !seats || !Array.isArray(seats) || seats.length === 0) {
-      return res.status(400).json({
-        status: "error",
-        message: "Invalid showtime or seat selection.",
-      });
+      return res
+        .status(400)
+        .json({ status: "error", message: "Invalid selection." });
     }
 
     const showtimeBase = await Showtime.findById(showtimeId);
@@ -79,64 +81,92 @@ const createBooking = async (req, res) => {
         .json({ status: "error", message: "Showtime not found." });
     }
 
-    // Validasi Waktu Logika
-    const [startHours, startMinutes] = showtimeBase.time_start
-      .split(":")
-      .map(Number);
-    const showTimeStart = new Date(showtimeBase.date);
-    showTimeStart.setHours(startHours, startMinutes, 0, 0);
+    // 🔥 VALIDASI WAKTU (WIB, UTC+7)
+    const { startAt, endAt } = getShowtimeWindowWIB(showtimeBase);
     const currentTime = new Date();
 
-    if (currentTime >= showTimeStart) {
+    // Kasus 1: film sudah mulai -> tutup booking
+    if (currentTime >= startAt) {
       return res.status(400).json({
         status: "error",
         message:
-          "The showtime has already started or ended. Tickets cannot be booked.",
+          "Tiket tidak dapat dipesan karena film sudah dimulai atau jadwal telah berlalu.",
       });
     }
 
-    // Atomic Update untuk mencegah Race Condition
+    // Kasus 2: jaring pengaman tambahan -> kalau karena alasan apa pun
+    if (currentTime >= endAt) {
+      return res.status(400).json({
+        status: "error",
+        message:
+          "Tiket tidak dapat dipesan karena jadwal tayang sudah berakhir.",
+      });
+    }
+
+    // Mengunci kursi di Showtime
     const updatedShowtime = await Showtime.findOneAndUpdate(
-      {
-        _id: showtimeId,
-        bookedSeats: { $nin: seats },
-      },
-      {
-        $push: { bookedSeats: { $each: seats } },
-      },
+      { _id: showtimeId, bookedSeats: { $nin: seats } },
+      { $push: { bookedSeats: { $each: seats } } },
       { new: true },
     );
 
     if (!updatedShowtime) {
-      const currentShowtime = await Showtime.findById(showtimeId);
-      const conflictSeats = seats.filter((seat) =>
-        currentShowtime.bookedSeats.includes(seat),
-      );
-
-      return res.status(409).json({
-        status: "error",
-        message: "One or more selected seats are no longer available.",
-        unavailableSeats: conflictSeats,
-      });
+      return res
+        .status(409)
+        .json({ status: "error", message: "Seats no longer available." });
     }
 
     const totalPrice = seats.length * showtimeBase.price;
 
     const newBooking = new Booking({
-      userId,
+      userId: user._id,
       movieId: updatedShowtime.movieId,
       showtimeId,
       seats,
       totalPrice,
-      status: "booked",
+      status: "pending",
     });
-
     await newBooking.save();
+
+    const orderId = `BKG-${newBooking._id}-${Date.now()}`;
+    const parameter = {
+      transaction_details: {
+        order_id: orderId,
+        gross_amount: totalPrice,
+      },
+      customer_details: {
+        first_name: user.name,
+        email: user.email,
+      },
+      item_details: [
+        {
+          id: showtimeId,
+          price: showtimeBase.price,
+          quantity: seats.length,
+          name: `Ticket - Seats: ${seats.join(", ")}`,
+        },
+      ],
+    };
+
+    const transaction = await snap.createTransaction(parameter);
+
+    const newPayment = new Payment({
+      bookingId: newBooking._id,
+      userId: user._id,
+      orderId: orderId,
+      grossAmount: totalPrice,
+      snapToken: transaction.token,
+      snapRedirectUrl: transaction.redirect_url,
+    });
+    await newPayment.save();
 
     res.status(201).json({
       status: "success",
-      message: "Booking created successfully. Please proceed to payment.",
-      data: newBooking,
+      message: "Booking created. Please complete your payment.",
+      data: {
+        booking: newBooking,
+        payment: newPayment,
+      },
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
@@ -144,52 +174,48 @@ const createBooking = async (req, res) => {
 };
 
 /**
- * 3. PAY BOOKING (USER)
+ * 3. WEBHOOK MIDTRANS NOTIFICATION (SYSTEM)
  */
-const payBooking = async (req, res) => {
+const midtransNotification = async (req, res) => {
   try {
-    const { bookingId } = req.params;
-    const userId = req.user._id;
+    const notificationJson = req.body;
 
-    const booking = await Booking.findById(bookingId);
+    const statusResponse =
+      await snap.transaction.notification(notificationJson);
+    const { order_id, transaction_status, payment_type } = statusResponse;
 
-    if (!booking) {
-      return res
-        .status(404)
-        .json({ status: "error", message: "Booking not found." });
-    }
+    const payment = await Payment.findOne({ orderId: order_id });
+    if (!payment) return res.status(404).json({ message: "Payment not found" });
 
-    if (booking.userId.toString() !== userId.toString()) {
-      return res
-        .status(403)
-        .json({ status: "error", message: "Access denied." });
-    }
+    const booking = await Booking.findById(payment.bookingId);
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    if (booking.status === "paid") {
-      return res
-        .status(400)
-        .json({
-          status: "error",
-          message: "This booking has already been paid.",
+    payment.paymentType = payment_type;
+    payment.transactionStatus = transaction_status;
+
+    if (
+      transaction_status === "settlement" ||
+      transaction_status === "capture"
+    ) {
+      booking.status = "paid";
+    } else if (
+      transaction_status === "cancel" ||
+      transaction_status === "deny" ||
+      transaction_status === "expire"
+    ) {
+      if (booking.status !== "cancelled") {
+        booking.status = "cancelled";
+
+        await Showtime.findByIdAndUpdate(booking.showtimeId, {
+          $pull: { bookedSeats: { $in: booking.seats } },
         });
-    }
-    if (booking.status === "cancelled") {
-      return res
-        .status(400)
-        .json({
-          status: "error",
-          message: "This booking has already been cancelled.",
-        });
+      }
     }
 
-    booking.status = "paid";
+    await payment.save();
     await booking.save();
 
-    res.status(200).json({
-      status: "success",
-      message: "Payment successful. Your ticket is confirmed.",
-      data: booking,
-    });
+    res.status(200).json({ status: "success", message: "Webhook processed" });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
@@ -202,23 +228,15 @@ const getUserBookings = async (req, res) => {
   try {
     const userId = req.user._id;
     const { status } = req.query;
-
     let query = { userId };
-
-    if (status) {
-      query.status = status;
-    }
+    if (status) query.status = status;
 
     const bookings = await Booking.find(query)
       .populate("movieId", "title poster")
       .populate("showtimeId", "studio date time_start time_end")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
-      status: "success",
-      message: "Booking history retrieved successfully.",
-      data: bookings,
-    });
+    res.status(200).json({ status: "success", data: bookings });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
@@ -232,63 +250,68 @@ const cancelBooking = async (req, res) => {
     const { bookingId } = req.params;
     const userId = req.user._id;
 
-    const booking = await Booking.findById(bookingId).populate("showtimeId");
-    if (!booking) {
+    const booking = await Booking.findById(bookingId);
+    if (!booking)
+      return res.status(404).json({ status: "error", message: "Not found." });
+    if (booking.userId.toString() !== userId.toString())
+      return res.status(403).json({ status: "error", message: "Denied." });
+    if (booking.status === "cancelled")
+      return res
+        .status(400)
+        .json({ status: "error", message: "Already cancelled." });
+    if (booking.status === "paid")
+      return res
+        .status(400)
+        .json({ status: "error", message: "Cannot cancel a paid booking." });
+
+    const showtime = await Showtime.findById(booking.showtimeId);
+    if (!showtime)
       return res
         .status(404)
-        .json({ status: "error", message: "Booking not found." });
-    }
+        .json({ status: "error", message: "Showtime data not found." });
 
-    if (booking.userId.toString() !== userId.toString()) {
-      return res.status(403).json({
-        status: "error",
-        message: "Access denied to cancel this booking.",
-      });
-    }
-
-    if (booking.status === "cancelled") {
-      return res.status(400).json({
-        status: "error",
-        message: "Booking is already cancelled.",
-      });
-    }
-
-    const showtime = booking.showtimeId;
-    if (!showtime) {
-      return res.status(404).json({
-        status: "error",
-        message: "Showtime data not found.",
-      });
-    }
-
-    // Validasi pembatalan maksimal 30 menit
-    const [hours, minutes] = showtime.time_start.split(":").map(Number);
-    const movieStartTime = new Date(showtime.date);
-    movieStartTime.setHours(hours, minutes, 0, 0);
-    const cancellationDeadline = new Date(
-      movieStartTime.getTime() - 30 * 60 * 1000,
-    );
+    // 🔥 Pakai helper yang sama dengan createBooking agar konsisten
+    const { startAt } = getShowtimeWindowWIB(showtime);
+    const cancellationDeadline = new Date(startAt.getTime() - 30 * 60 * 1000);
     const currentTime = new Date();
 
     if (currentTime > cancellationDeadline) {
       return res.status(400).json({
         status: "error",
         message:
-          "Cancellation deadline has passed. Tickets can only be cancelled up to 30 minutes before the movie starts.",
+          "Batas waktu pembatalan telah lewat (maksimal 30 menit sebelum film dimulai).",
       });
     }
 
-    await Showtime.findByIdAndUpdate(showtime._id, {
+    await Showtime.findByIdAndUpdate(booking.showtimeId, {
       $pull: { bookedSeats: { $in: booking.seats } },
     });
 
     booking.status = "cancelled";
     await booking.save();
 
+    const payment = await Payment.findOne({
+      bookingId: booking._id,
+      transactionStatus: "pending",
+    });
+
+    if (payment) {
+      try {
+        await snap.transaction.cancel(payment.orderId);
+        payment.transactionStatus = "cancel";
+        await payment.save();
+      } catch (e) {
+        res.status(500).json({
+          status: "error",
+          message: e.message || "Failed to cancel payment with Midtrans.",
+        });
+        return;
+      }
+    }
+
     res.status(200).json({
       status: "success",
-      message: "Booking cancelled successfully. Seats have been released.",
-      cancelledSeats: booking.seats,
+      message: "Cancelled successfully. Seats released.",
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
@@ -298,7 +321,7 @@ const cancelBooking = async (req, res) => {
 module.exports = {
   getShowtimeSeats,
   createBooking,
-  payBooking,
+  midtransNotification,
   getUserBookings,
   cancelBooking,
 };
