@@ -5,30 +5,42 @@ const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
 
 exports.register = async (req, res) => {
-    try {
-        const { name, email, password, passwordConfirm,location } = req.body;
-        // validasi password
-        if (password !== passwordConfirm) {
-      return res.status(400).json({ 
-        status: 'error',
-        message: 'Password and Confirm Password must match' 
+  try {
+    const { name, email, password, passwordConfirm, location } = req.body;
+
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      typeof passwordConfirm !== "string"
+    ) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid input format. Data must be text.",
+      });
+    }
+
+    // validasi password
+    if (password !== passwordConfirm) {
+      return res.status(400).json({
+        status: "error",
+        message: "Password and Confirm Password must match",
       });
     }
 
     // cek email sudah terdaftar atau belum
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ 
-        status: 'error',
-        message: 'Duplicate email registration'
+      return res.status(409).json({
+        status: "error",
+        message: "Duplicate email registration",
       });
     }
 
     // cek role, jika ada role selain 'user', tolak registrasi
-    if(req.body.role && req.body.role !== 'user') {
+    if (req.body.role && req.body.role !== "user") {
       return res.status(403).json({
-        status: 'error',
-        message: 'You are not allowed to register as admin'
+        status: "error",
+        message: "You are not allowed to register as admin",
       });
     }
 
@@ -38,37 +50,45 @@ exports.register = async (req, res) => {
       email,
       password,
       location,
-      role: 'user' 
+      role: "user",
     });
+
     res.status(201).json({
-      status: 'success',
-      message: 'User registered successfully',
+      status: "success",
+      message: "User registered successfully",
       data: {
         userId: user._id,
         name: user.name,
         email: user.email,
         location: user.location,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
-    } catch (error) {
-        res.status(500).json({
-            status: "error",
-            message: error.message,
-        })
-    }
-}
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
 
 // login
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // validasi input
+    // 🛡️ NoSQL INJECTION CHECK & VALIDASI: Wajib ada dan wajib string
     if (!email || !password) {
       return res.status(400).json({
         status: "error",
         message: "Email and password are required",
+      });
+    }
+
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid input format. Email and password must be text.",
       });
     }
 
@@ -128,25 +148,35 @@ exports.login = async (req, res) => {
       message: error.message,
     });
   }
-}
-
+};
 
 // logout
 exports.logout = (req, res) => {
-    res.clearCookie("jwt");
-    res.status(200).json({
-      status: "success",
-      message: "Logged out successfully",
-    });
-}
+  res.clearCookie("jwt");
+  res.status(200).json({
+    status: "success",
+    message: "Logged out successfully",
+  });
+};
 
 exports.forgotPassword = async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.body.email });
+    const { email } = req.body;
+
+    // 🛡️ NoSQL INJECTION CHECK
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({
+        status: "error",
+        message: "Valid email is required.",
+      });
+    }
+
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({
         status: "error",
-        message: "Tidak ada user dengan email tersebut atau Email tidak aktif. Silakan cek kembali email yang kamu masukkan.",
+        message:
+          "Tidak ada user dengan email tersebut atau Email tidak aktif. Silakan cek kembali email yang kamu masukkan.",
       });
     }
 
@@ -200,77 +230,85 @@ exports.forgotPassword = async (req, res) => {
 };
 
 exports.resetPassword = async (req, res) => {
-    try {
-      const resetToken = req.params.token;
-      const hashedToken = crypto
-        .createHash("sha256")
-        .update(resetToken)
-        .digest("hex");
+  try {
+    const resetToken = req.params.token;
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
 
-      const user = await User.findOne({
-        resetPasswordToken: hashedToken,
-        resetPasswordExpire: { $gt: Date.now() },
-      });
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
 
-      if (!user) {
-        return res.status(400).json({
-          status: "error",
-          message: "Token tidak valid atau sudah kedaluwarsa.",
-        });
-      }
-
-      // ambil password baru
-      const { password, passwordConfirm } = req.body;
-
-      if (password !== passwordConfirm) {
-        return res.status(400).json({
-          status: "error",
-          message: "Password dan konfirmasi password tidak cocok.",
-        });
-      }
-      user.password = password;
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpire = undefined;
-
-      await user.save();
-
-      const payload = {
-        userId: user._id,
-        email: user.email,
-        role: user.role,
-      };
-
-      const token = jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN,
-      });
-
-      const cookieOptions = {
-        expires: new Date(
-          Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-        ),
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-      };
-
-      res.cookie("jwt", token, cookieOptions);
-
-      res.status(200).json({
-        status: "success",
-        message: "Password berhasil diubah. Anda sudah otomatis login.",
-      });
-    } catch (error) {
-      // Tangkap error jika password baru tidak lolos validasi Regex
-      if (error.name === "ValidationError") {
-        const messages = Object.values(error.errors).map((err) => err.message);
-        return res.status(400).json({
-          status: "error",
-          message: messages.join(", "),
-        });
-      }
-
-      res.status(500).json({
+    if (!user) {
+      return res.status(400).json({
         status: "error",
-        message: error.message,
+        message: "Token tidak valid atau sudah kedaluwarsa.",
       });
     }
-}
+
+    // ambil password baru
+    const { password, passwordConfirm } = req.body;
+
+    // 🛡️ NoSQL INJECTION CHECK
+    if (typeof password !== "string" || typeof passwordConfirm !== "string") {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid password format.",
+      });
+    }
+
+    if (password !== passwordConfirm) {
+      return res.status(400).json({
+        status: "error",
+        message: "Password dan konfirmasi password tidak cocok.",
+      });
+    }
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    const payload = {
+      userId: user._id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
+    });
+
+    const cookieOptions = {
+      expires: new Date(
+        Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
+      ),
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+    };
+
+    res.cookie("jwt", token, cookieOptions);
+
+    res.status(200).json({
+      status: "success",
+      message: "Password berhasil diubah. Anda sudah otomatis login.",
+    });
+  } catch (error) {
+    // Tangkap error jika password baru tidak lolos validasi Regex
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({
+        status: "error",
+        message: messages.join(", "),
+      });
+    }
+
+    res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
