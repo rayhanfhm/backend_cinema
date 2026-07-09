@@ -3,6 +3,7 @@ const router = express.Router();
 const movieController = require("../controllers/movieController");
 const showtimeController = require("../controllers/showtimeController");
 const authMiddleware = require("../middleware/authMiddleware");
+const uploadPoster = require("../middleware/uploadMiddleware");
 
 // public routes
 router.get("/", movieController.getAllMovies);
@@ -13,6 +14,7 @@ router.post(
   "/add-movie",
   authMiddleware.protect,
   authMiddleware.requireAdmin,
+  uploadPoster.single("poster"),
   movieController.createMovie,
 );
 

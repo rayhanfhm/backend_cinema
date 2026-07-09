@@ -31,9 +31,8 @@ const MovieSchema = new mongoose.Schema({
   },
   poster: {
     type: String,
-    required: [true, "Poster URL is required"],
+    required: [true, "Poster is required"],
     trim: true,
-    match: [/^https?:\/\/.+/, "Poster must be a valid HTTP/HTTPS URL"],
   },
   description: {
     type: String,
