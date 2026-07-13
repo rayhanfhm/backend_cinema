@@ -247,10 +247,17 @@ const getUserBookings = async (req, res) => {
     }
 
     // Ambil semua booking user
-    const bookings = await Booking.find(query)
-      .populate("movieId", "title poster duration genre")
-      .populate("showtimeId", "studio date time_start time_end")
-      .sort({ createdAt: -1 });
+     const bookings = await Booking.find(query)
+       .populate("movieId", "title poster")
+       .populate({
+         path: "showtimeId",
+         select: "movieId studio date time_start time_end",
+         populate: {
+           path: "movieId",
+           select: "title poster",
+         },
+       })
+       .sort({ createdAt: -1 });
 
     // Ambil semua payment user
     const payments = await Payment.find({

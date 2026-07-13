@@ -28,6 +28,7 @@ router.put(
   "/update-movie/:id",
   authMiddleware.protect,
   authMiddleware.requireAdmin,
+  uploadPoster.single("poster"),
   movieController.updateMovieById,
 );
 

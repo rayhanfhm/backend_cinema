@@ -1,5 +1,6 @@
 const Movie = require("../models/Movie");
-
+const fs = require("fs");
+const path = require("path");
 
 // GET ALL MOVIES
 exports.getAllMovies = async (req, res) => {
@@ -57,7 +58,6 @@ exports.getAllMovies = async (req, res) => {
   }
 };
 
-
 // GET ALL MOVIES (ADMIN) - Tanpa pagination & filtering
 exports.getAllMoviesAdmin = async (req, res) => {
   try {
@@ -66,7 +66,7 @@ exports.getAllMoviesAdmin = async (req, res) => {
     res.status(200).json({
       status: "success",
       message: "Seluruh data film berhasil diambil untuk Admin.",
-      totalItems: movies.length, 
+      totalItems: movies.length,
       data: movies,
     });
   } catch (error) {
@@ -110,14 +110,16 @@ exports.getMovieById = async (req, res) => {
   }
 };
 
-
 // CREATE MOVIE
 exports.createMovie = async (req, res) => {
   try {
-    // Jika ada file yang di-upload, tambahkan path-nya ke req.body.poster
     if (req.file) {
-      // Path yang disimpan: /img/posters/poster-1689...jpg
+      // Path yang disimpan: /img/posters/<movieId>.jpg
       req.body.poster = `/img/posters/${req.file.filename}`;
+
+      if (req.generatedId) {
+        req.body._id = req.generatedId;
+      }
     }
 
     const movie = await Movie.create(req.body);
@@ -130,43 +132,78 @@ exports.createMovie = async (req, res) => {
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({ status: "error", message: messages.join(", ") });
+      return res
+        .status(400)
+        .json({ status: "error", message: messages.join(", ") });
     }
-    res.status(500).json({ status: "error", message: "Terjadi kesalahan pada server." });
+    res
+      .status(500)
+      .json({ status: "error", message: "Terjadi kesalahan pada server." });
   }
 };
 
 // UPDATE MOVIE
 exports.updateMovieById = async (req, res) => {
   try {
-    // Jika user meng-upload poster baru saat update, timpa path lamanya
+    const existingMovie = await Movie.findById(req.params.id);
+
+    if (!existingMovie) {
+      return res.status(404).json({
+        status: "error",
+        message: "Data film tidak ditemukan.",
+      });
+    }
+
     if (req.file) {
+      const posterDir = path.join(__dirname, "..", "public", "img", "posters");
+      if (existingMovie.poster) {
+        const oldFilename = path.basename(existingMovie.poster);
+        const oldFilePath = path.join(posterDir, oldFilename);
+
+        if (oldFilename !== req.file.filename && fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+      }
+
       req.body.poster = `/img/posters/${req.file.filename}`;
     }
 
-    const movie = await Movie.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!movie) {
-      return res.status(404).json({ status: "error", message: "Data film tidak ditemukan." });
-    }
+    const updatedMovie = await Movie.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
 
     res.status(200).json({
       status: "success",
       message: "Data film berhasil diperbarui.",
-      data: movie,
+      data: updatedMovie,
     });
   } catch (error) {
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({ status: "error", message: messages.join(", ") });
+
+      return res.status(400).json({
+        status: "error",
+        message: messages.join(", "),
+      });
     }
+
     if (error.name === "CastError") {
-      return res.status(400).json({ status: "error", message: "ID film tidak valid." });
+      return res.status(400).json({
+        status: "error",
+        message: "ID film tidak valid.",
+      });
     }
-    res.status(500).json({ status: "error", message: "Terjadi kesalahan pada server." });
+
+    res.status(500).json({
+      status: "error",
+      message: "Terjadi kesalahan pada server.",
+      error: error.message,
+    });
   }
 };
 
