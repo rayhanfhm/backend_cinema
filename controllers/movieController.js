@@ -57,6 +57,27 @@ exports.getAllMovies = async (req, res) => {
   }
 };
 
+
+// GET ALL MOVIES (ADMIN) - Tanpa pagination & filtering
+exports.getAllMoviesAdmin = async (req, res) => {
+  try {
+    const movies = await Movie.find().sort({ createdAt: -1 });
+
+    res.status(200).json({
+      status: "success",
+      message: "Seluruh data film berhasil diambil untuk Admin.",
+      totalItems: movies.length, 
+      data: movies,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: "Terjadi kesalahan pada server saat mengambil data film.",
+      error: error.message,
+    });
+  }
+};
+
 // GET MOVIE BY ID
 exports.getMovieById = async (req, res) => {
   try {

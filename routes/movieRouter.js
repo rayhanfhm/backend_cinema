@@ -10,6 +10,12 @@ router.get("/", movieController.getAllMovies);
 router.get("/:id", movieController.getMovieById);
 
 // Admin routes
+router.get(
+  "/admin/all",
+  authMiddleware.protect,
+  authMiddleware.requireAdmin,
+  movieController.getAllMoviesAdmin,
+);
 router.post(
   "/add-movie",
   authMiddleware.protect,

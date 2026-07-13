@@ -129,24 +129,30 @@ const createBooking = async (req, res) => {
     await newBooking.save();
 
     const orderId = `BKG-${newBooking._id}-${Date.now()}`;
-    const parameter = {
-      transaction_details: {
-        order_id: orderId,
-        gross_amount: totalPrice,
-      },
-      customer_details: {
-        first_name: user.name,
-        email: user.email,
-      },
-      item_details: [
-        {
-          id: showtimeId,
-          price: showtimeBase.price,
-          quantity: seats.length,
-          name: `Ticket - Seats: ${seats.join(", ")}`,
-        },
-      ],
-    };
+   const parameter = {
+     transaction_details: {
+       order_id: orderId,
+       gross_amount: totalPrice,
+     },
+
+     customer_details: {
+       first_name: user.name,
+       email: user.email,
+     },
+
+     item_details: [
+       {
+         id: showtimeId,
+         price: showtimeBase.price,
+         quantity: seats.length,
+         name: `Ticket - Seats: ${seats.join(", ")}`,
+       },
+     ],
+
+     callbacks: {
+       finish: process.env.MIDTRANS_FINISH_REDIRECT,
+     },
+   };
 
     const transaction = await snap.createTransaction(parameter);
 
@@ -224,24 +230,119 @@ const midtransNotification = async (req, res) => {
 /**
  * 4. GET USER BOOKINGS (USER)
  */
+/**
+ * 4. GET USER BOOKINGS (USER)
+ */
 const getUserBookings = async (req, res) => {
   try {
     const userId = req.user._id;
     const { status } = req.query;
-    let query = { userId };
-    if (status) query.status = status;
 
+    const query = {
+      userId,
+    };
+
+    if (status) {
+      query.status = status;
+    }
+
+    // Ambil semua booking user
     const bookings = await Booking.find(query)
-      .populate("movieId", "title poster")
+      .populate("movieId", "title poster duration genre")
       .populate("showtimeId", "studio date time_start time_end")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ status: "success", data: bookings });
+    // Ambil semua payment user
+    const payments = await Payment.find({
+      userId,
+    });
+
+    // Mapping payment berdasarkan bookingId
+    const paymentMap = {};
+
+    payments.forEach((payment) => {
+      paymentMap[payment.bookingId.toString()] = payment;
+    });
+
+    const results = bookings.map((booking) => {
+      const payment = paymentMap[booking._id.toString()];
+
+      let paymentInfo = null;
+
+      if (payment) {
+        // Sudah dibayar
+        if (
+          payment.transactionStatus === "settlement" ||
+          payment.transactionStatus === "capture"
+        ) {
+          paymentInfo = {
+            status: "paid",
+            message: "Payment has been completed.",
+            paymentType: payment.paymentType,
+            orderId: payment.orderId,
+            grossAmount: payment.grossAmount,
+            paidAt: payment.updatedAt,
+          };
+        }
+
+        // Masih pending -> kirim ulang snap supaya bisa lanjut bayar
+        else if (payment.transactionStatus === "pending") {
+          paymentInfo = {
+            status: "pending",
+            message: "Waiting for payment.",
+            orderId: payment.orderId,
+            grossAmount: payment.grossAmount,
+            snapToken: payment.snapToken,
+            snapRedirectUrl: payment.snapRedirectUrl,
+            paymentType: payment.paymentType,
+          };
+        }
+
+        // Expire
+        else if (payment.transactionStatus === "expire") {
+          paymentInfo = {
+            status: "expire",
+            message: "Payment has expired.",
+            orderId: payment.orderId,
+          };
+        }
+
+        // Cancel
+        else if (payment.transactionStatus === "cancel") {
+          paymentInfo = {
+            status: "cancel",
+            message: "Payment has been cancelled.",
+            orderId: payment.orderId,
+          };
+        }
+
+        // Deny
+        else if (payment.transactionStatus === "deny") {
+          paymentInfo = {
+            status: "deny",
+            message: "Payment was denied.",
+            orderId: payment.orderId,
+          };
+        }
+      }
+
+      return {
+        ...booking.toObject(),
+        payment: paymentInfo,
+      };
+    });
+
+    return res.status(200).json({
+      status: "success",
+      data: results,
+    });
   } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
   }
 };
-
 /**
  * 5. CANCEL BOOKING (USER)
  */

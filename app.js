@@ -12,7 +12,8 @@ const movieRoutes = require("./routes/movieRouter");
 const showtimeRouter = require("./routes/showtimeRouter");
 const publicRoutes = require("./routes/publicRoutes");
 const userController = require("./controllers/userController");
-const { protect } = require("./middleware/authMiddleware");
+const adminController = require("./controllers/adminController");
+const { protect, requireAdmin } = require("./middleware/authMiddleware");
 
 const app = express();
 const port = process.env.PORT || 1975;
@@ -51,6 +52,11 @@ app.use("/api/movies", movieRoutes);
 app.use("/api/showtimes", showtimeRouter);
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
+
+// admin untutuk mengelola user
+app.get("/api/admin/users", protect, requireAdmin, adminController.getAllUsers);
+app.get("/api/admin/bookings", protect, requireAdmin, adminController.getAllBookings);
+app.get("/api/admin/payments", protect, requireAdmin, adminController.getAllPayments);
 
 if (require.main === module) {
   app.listen(port, "0.0.0.0", () => {
