@@ -359,31 +359,51 @@ const cancelBooking = async (req, res) => {
     const userId = req.user._id;
 
     const booking = await Booking.findById(bookingId);
-    if (!booking)
-      return res.status(404).json({ status: "error", message: "Not found." });
-    if (booking.userId.toString() !== userId.toString())
-      return res.status(403).json({ status: "error", message: "Forbidden.  " });
-    if (booking.status === "cancelled")
-      return res
-        .status(400)
-        .json({ status: "error", message: "Already cancelled." });
-    if (booking.status === "paid")
-      return res
-        .status(400)
-        .json({ status: "error", message: "Cannot cancel a paid booking." });
+
+    if (!booking) {
+      return res.status(404).json({
+        status: "error",
+        message: "Booking not found.",
+      });
+    }
+
+    if (booking.userId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        status: "error",
+        message: "Access denied.",
+      });
+    }
+
+    if (booking.status === "cancelled") {
+      return res.status(400).json({
+        status: "error",
+        message: "Booking has already been cancelled.",
+      });
+    }
+
+    if (booking.status === "paid") {
+      return res.status(400).json({
+        status: "error",
+        message: "Paid bookings cannot be cancelled.",
+      });
+    }
 
     const showtime = await Showtime.findById(booking.showtimeId);
-    if (!showtime)
-      return res
-        .status(404)
-        .json({ status: "error", message: "Showtime data not found." });
 
-    // 🔥 Pakai helper yang sama dengan createBooking agar konsisten
+    if (!showtime) {
+      return res.status(404).json({
+        status: "error",
+        message: "Showtime not found.",
+      });
+    }
+
+    // Validasi batas waktu pembatalan (30 menit sebelum film dimulai)
     const { startAt } = getShowtimeWindowWIB(showtime);
-    const cancellationDeadline = new Date(startAt.getTime() - 30 * 60 * 1000);
-    const currentTime = new Date();
+    const cancellationDeadline = new Date(
+      startAt.getTime() - 30 * 60 * 1000
+    );
 
-    if (currentTime > cancellationDeadline) {
+    if (new Date() > cancellationDeadline) {
       return res.status(400).json({
         status: "error",
         message:
@@ -391,38 +411,69 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    await Showtime.findByIdAndUpdate(booking.showtimeId, {
-      $pull: { bookedSeats: { $in: booking.seats } },
-    });
-
-    booking.status = "cancelled";
-    await booking.save();
-
+    // Cari payment pending
     const payment = await Payment.findOne({
       bookingId: booking._id,
       transactionStatus: "pending",
     });
 
+    // Jika ada payment pending, coba cancel di Midtrans
     if (payment) {
       try {
         await snap.transaction.cancel(payment.orderId);
+
         payment.transactionStatus = "cancel";
         await payment.save();
-      } catch (e) {
-        res.status(500).json({
-          status: "error",
-          message: e.message || "Failed to cancel payment with Midtrans.",
-        });
-        return;
+
+        console.log(
+          `[MIDTRANS] Transaction ${payment.orderId} cancelled successfully.`
+        );
+      } catch (err) {
+        // Abaikan jika transaksi belum pernah aktif di Midtrans
+        if (
+          err.message &&
+          err.message.includes("Transaction doesn't exist")
+        ) {
+          console.warn(
+            `[MIDTRANS] Transaction ${payment.orderId} belum terdaftar di Midtrans. Skip cancel.`
+          );
+
+          payment.transactionStatus = "cancel";
+          await payment.save();
+        } else {
+          console.error("[MIDTRANS CANCEL ERROR]", err);
+
+          return res.status(500).json({
+            status: "error",
+            message:
+              "Failed to cancel payment transaction. Please try again.",
+          });
+        }
       }
     }
 
-    res.status(200).json({
+    // Lepaskan kursi
+    await Showtime.findByIdAndUpdate(booking.showtimeId, {
+      $pull: {
+        bookedSeats: { $in: booking.seats },
+      },
+    });
+
+    // Update status booking
+    booking.status = "cancelled";
+    await booking.save();
+
+    return res.status(200).json({
       status: "success",
-      message: "Cancelled successfully. Seats released.",
+      message: "Booking cancelled successfully. Seats have been released.",
     });
   } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
+    console.error(error);
+
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
   }
 };
 

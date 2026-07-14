@@ -19,7 +19,7 @@ const seedAdmin = async () => {
 
   try {
     const adminEmail = process.env.EMAIL;
-    const adminPassword = process.env.PASSWORD;
+    const adminPassword = process.env.PASSWORD || "defaultAdminPassword123@"; 
 
     // Cek apakah admin sudah ada agar tidak terjadi duplikasi saat script dijalankan ulang
     const existingAdmin = await User.findOne({ email: adminEmail });
@@ -37,6 +37,7 @@ const seedAdmin = async () => {
       name: "Super Admin",
       email: adminEmail,
       password: hashedPassword,
+      location: "Jakarta",
       role: "admin",
     };
 
