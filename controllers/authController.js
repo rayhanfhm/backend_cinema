@@ -190,7 +190,7 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save({ validateBeforeSave: false });
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
     const userIp = req.headers["x-forwarded-for"] || req.ip;
     const currentDate = new Date().toLocaleString("id-ID", {
       timeZone: "Asia/Jakarta",
