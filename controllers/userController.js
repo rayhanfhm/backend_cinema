@@ -362,7 +362,7 @@ const cancelBooking = async (req, res) => {
     if (!booking)
       return res.status(404).json({ status: "error", message: "Not found." });
     if (booking.userId.toString() !== userId.toString())
-      return res.status(403).json({ status: "error", message: "Denied." });
+      return res.status(403).json({ status: "error", message: "Forbidden.  " });
     if (booking.status === "cancelled")
       return res
         .status(400)
