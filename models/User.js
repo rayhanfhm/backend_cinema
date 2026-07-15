@@ -44,6 +44,15 @@ const userSchema = new mongoose.Schema({
     enum: ["user", "admin"],
     default: "user",
   },
+ location: {
+  type: String,
+  required: [true, "Location wajib diisi"],
+  minlength: [3, "Location minimal harus 3 karakter"],
+  match: [
+    /^[a-zA-Z\s.]+$/,
+    "Location hanya boleh berisi huruf, spasi, dan titik"
+  ]
+},
   createdAt: {
     type: Date,
     default: Date.now,
