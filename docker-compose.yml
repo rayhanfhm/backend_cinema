@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend-cinema:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: backend-cinema
+    ports:
+      - "5000:3000" # Map port host 5000 ke port 3000 container
+    env_file:
+      - .env # Menggunakan file .env yang ada di folder project
+    networks:
+      - cinema-net
+    restart: always
+
+networks:
+  cinema-net:
+    external: true

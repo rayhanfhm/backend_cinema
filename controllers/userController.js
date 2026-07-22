@@ -227,9 +227,7 @@ const midtransNotification = async (req, res) => {
   }
 };
 
-/**
- * 4. GET USER BOOKINGS (USER)
- */
+
 /**
  * 4. GET USER BOOKINGS (USER)
  */

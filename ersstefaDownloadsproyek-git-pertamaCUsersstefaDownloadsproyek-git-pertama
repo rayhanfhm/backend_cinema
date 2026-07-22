@@ -1,0 +1,32 @@
+*   [33m54ff25b[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #3 from rayhanfhm/development
+[31m|[m[32m\[m  
+[31m|[m [32m|[m *   [33md8fe04f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelopment[m[33m)[m ngga tau
+[31m|[m [32m|[m [33m|[m[32m\[m  
+[31m|[m [32m|[m [33m|[m[32m/[m  
+[31m|[m [32m|[m[32m/[m[33m|[m   
+[31m|[m * [33m|[m [33m27505a1[m[33m ([m[1;31morigin/development[m[33m)[m bug fix cancel bookings
+[31m|[m [34m|[m * [33m094beb4[m ngga tau
+[31m|[m [34m|[m[34m/[m  
+[31m|[m * [33m9762050[m bug fix: update movie admin
+[31m|[m * [33m5e3123d[m #45 Bug Fix: ada yang kurang di user controller dan #12 Add_Fitur: untuk admin lihat semua movie dan juga admin lihat user
+[31m|[m * [33m461e70a[m update bugfix dan juga add midtrans payment
+[31m|[m * [33m30f709c[m bugfix : frontend ngga mau connect kemungkinan dari cors sama  front end nya
+[31m|[m * [33m10aa251[m feat: update auth controller & fix NoSQL injection security
+[31m|[m * [33mfc395d2[m add_fitur: nambah fitur untuk get profile dan juga untuk edit profile
+[31m|[m * [33m54d1acb[m Update patch celah logika, dan menambahkan controller untuk payment
+[31m|[m * [33m1987615[m perbaikan: struktur respon json nya ada beberapa yang ngga ada status, sudah ku perbaiki'
+[31m|[m * [33m15dfb8a[m 6# Add public controller and routes
+[31m|[m * [33mffdec4d[m #5 Add feature for user to book, calculate price of the booking, cancel booking (with buffer 30 min), and to check history
+[31m|[m * [33mf62b488[m #4 Fitur CRUD Showtime Selesai
+[31m|[m * [33mb19fd30[m #3 Fitur CRUD Movie Admin udah selesai
+[31m|[m * [33m9f5f72d[m #3 add_database_schema
+[31m|[m[31m/[m  
+* [33mf6a3ee4[m[33m ([m[1;32mmain[m[33m)[m Add user controller 1
+*   [33me3e0892[m Merge pull request #2 from rayhanfhm/development
+[35m|[m[36m\[m  
+[35m|[m * [33mf0b39d7[m #2 update untuk koment kerjain di app js nya
+* [36m|[m [33mae584ec[m Merge pull request #1 from dennis1645/development
+[1;31m|[m[36m\[m[36m|[m 
+[1;31m|[m * [33m1556582[m #1 Fitur Auth Selesai
+[1;31m|[m[1;31m/[m  
+* [33m7d6c396[m first commit
