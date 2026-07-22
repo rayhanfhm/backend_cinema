@@ -37,7 +37,7 @@ app.use(morgan("dev"));
 app.get("/", (req, res) => {
   res.status(200).json({
     status: "success",
-    message: "Server is running",
+    message: "Server is running yaaaaa",
   });
 });
 
