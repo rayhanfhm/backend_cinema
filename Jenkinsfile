@@ -25,6 +25,19 @@ pipeline {
         stage('Deploy with Docker Compose') {
             steps {
                 script {
+                    echo "Creating .env file for deployment..."
+                    
+                    // Suntikkan isi .env langsung di sini
+                    // Ganti teks DI_BAWAH_INI dengan isi asli dari file .env kamu
+                    bat '''@echo off
+(
+echo PORT=3000
+echo DB_HOST=cinema-db
+echo DB_USER=root
+echo DB_PASSWORD=secret
+) > .env
+'''
+
                     echo "Deploying backend service using Docker Compose..."
                     bat "docker compose down"
                     bat "docker compose up -d"
