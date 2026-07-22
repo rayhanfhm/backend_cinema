@@ -2,65 +2,37 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME = 'backend-cinema'
-        DOCKER_IMAGE = 'backend-cinema:latest'
+        // Path workspace Jenkins Windows (atau ganti sesuai direktori tempat file kamu)
+        APP_DIR = 'C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\backend-cinema'
     }
 
     stages {
-        stage('Checkout Source Code') {
+        stage('Build Backend Image') {
             steps {
-                checkout scm
+                echo "Building updated be-cinema image di ${APP_DIR}..."
+                bat "docker compose --project-directory \"%APP_DIR%\" -f \"%APP_DIR%\\docker-compose.yml\" build backend"
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Deploy Backend & Database') {
             steps {
-                script {
-                    echo "Building Docker image ${DOCKER_IMAGE}..."
-                    bat "docker build -t ${DOCKER_IMAGE} -f dockerfile ."
-                }
-            }
-        }
-
-        stage('Deploy with Docker Compose') {
-            steps {
-                script {
-                    echo "Creating .env file for deployment..."
-                    
-                    // Suntikkan isi .env langsung di sini
-                    // Ganti teks DI_BAWAH_INI dengan isi asli dari file .env kamu
-                    bat '''@echo off
-(
-echo PORT=3000
-echo DB_HOST=cinema-db
-echo DB_USER=root
-echo DB_PASSWORD=secret
-) > .env
-'''
-
-                    echo "Deploying backend service using Docker Compose..."
-                    bat "docker compose down"
-                    bat "docker compose up -d"
-                }
-            }
-        }
-
-        stage('Cleanup Dangling Images') {
-            steps {
-                script {
-                    echo "Cleaning up dangling Docker images..."
-                    bat "docker image prune -f"
-                }
+                echo "Deploying Backend & Mongo containers dari ${APP_DIR}..."
+                // Menjalankan stack secara utuh
+                bat "docker compose --project-directory \"%APP_DIR%\" -f \"%APP_DIR%\\docker-compose.yml\" up -d --build"
             }
         }
     }
 
     post {
         success {
-            echo "Pipeline Backend berhasil! Service berjalan di network cinema-net."
+            echo 'Deployment Backend Cinema & Mongo berhasil!'
         }
         failure {
-            echo "Pipeline Gagal! Periksa log Jenkins untuk detailnya."
+            echo 'Deployment Backend gagal. Periksa log Jenkins.'
+        }
+        always {
+            // Membersihkan dangling images bekas build
+            bat 'docker image prune -f'
         }
     }
 }
