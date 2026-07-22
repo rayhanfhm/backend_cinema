@@ -2,30 +2,45 @@ pipeline {
     agent any
 
     environment {
-        // Path workspace Jenkins Windows (atau ganti sesuai direktori tempat file kamu)
-        APP_DIR = 'C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\backend-cinema'
+        // Path direktori tempat file .env kamu berada di Windows
+        SOURCE_ENV_DIR = 'C:\\Users\\stefa\\Downloads\\backend_cinema'
     }
 
     stages {
+        stage('Copy .env File') {
+            steps {
+                script {
+                    echo "Mengopi file .env dari ${SOURCE_ENV_DIR} ke workspace Jenkins..."
+                    // Mengopi file .env dari folder Downloads ke workspace Jenkins saat ini
+                    bat "copy /Y \"${SOURCE_ENV_DIR}\\.env\" .env"
+                }
+            }
+        }
+
         stage('Build Backend Image') {
             steps {
-                echo "Building updated be-cinema image di ${APP_DIR}..."
-                bat "docker compose --project-directory \"%APP_DIR%\" -f \"%APP_DIR%\\docker-compose.yml\" build backend"
+                script {
+                    echo "Building Docker image backend..."
+                    // Menggunakan bat dan menambahkan --load agar image tersimpan di lokal Docker
+                    bat "docker compose build --load backend-cinema"
+                }
             }
         }
 
         stage('Deploy Backend & Database') {
             steps {
-                echo "Deploying Backend & Mongo containers dari ${APP_DIR}..."
-                // Menjalankan stack secara utuh
-                bat "docker compose --project-directory \"%APP_DIR%\" -f \"%APP_DIR%\\docker-compose.yml\" up -d --build"
+                script {
+                    echo "Deploying containers..."
+                    bat "docker compose down"
+                    bat "docker compose up -d"
+                }
             }
         }
     }
 
     post {
         success {
-            echo 'Deployment Backend Cinema & Mongo berhasil!'
+            echo 'Deployment Backend Cinema berhasil!'
         }
         failure {
             echo 'Deployment Backend gagal. Periksa log Jenkins.'
